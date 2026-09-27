@@ -1,4 +1,6 @@
+import os
 import re
+import stat
 
 import pytest
 
@@ -48,14 +50,12 @@ class TestKeyHandling:
         assert len(key) == 32
         assert load_or_create_key(path) == key
 
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits do not exist on Windows")
     def test_created_key_is_not_world_readable(self, tmp_path):
-        import os
-        import stat
-
         path = str(tmp_path / "anon.key")
         load_or_create_key(path, create=True)
         mode = stat.S_IMODE(os.stat(path).st_mode)
-        assert mode & 0o077 == 0
+        assert mode & 0o077 == 0, f"key file is mode {mode:o}, expected no group or other access"
 
     def test_no_key_file_gives_a_fresh_random_key(self):
         first = load_or_create_key(None)
