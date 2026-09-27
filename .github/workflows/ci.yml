@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  self-check:
+    # The detector must find the demo data's PII, or the tool is decorative.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - name: report finds the known columns
+        run: |
+          sqlite-anon tests/fixtures/demo.db --report | tee report.txt
+          grep -q "users.email" report.txt
+          grep -q "users.notes" report.txt
+      - name: anonymised copy has no original PII
+        run: |
+          sqlite-anon tests/fixtures/demo.db -o anon.db --key-file anon.key --create-key
+          ! grep -aq "ana.silva@empresa.com.br" anon.db
+          ! grep -aq "123.456.789-00" anon.db
